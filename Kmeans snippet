@@ -1,0 +1,48 @@
+import pandas as pd
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.cluster import KMeans
+import re
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+
+# Load the CSV file
+data = pd.read_csv('responses.csv')
+
+# Preprocess the text data
+# Convert to lowercase
+data['Response_Column'] = data['Response_Column'].str.lower()
+
+data['Response_Column'] = data['Response_Column'].astype(str)
+data['Response_Column'].fillna('', inplace=True)
+
+# Remove punctuation
+data['Response_Column'] = data['Response_Column'].apply(lambda x: re.sub(r'[^\w\s]', '', x))
+
+# Remove stopwords
+stop_words = set(stopwords.words('english'))
+data['Response_Column'] = data['Response_Column'].apply(lambda x: ' '.join([word for word in x.split() if word not in stop_words]))
+
+# Lemmatization
+lemmatizer = WordNetLemmatizer()
+data['Response_Column'] = data['Response_Column'].apply(lambda x: ' '.join([lemmatizer.lemmatize(word) for word in x.split()]))
+
+# Initialize the TF-IDF vectorizer
+vectorizer = TfidfVectorizer()
+
+# Apply the vectorizer to the text data
+X = vectorizer.fit_transform(data['Response_Column'])
+
+# Perform clustering using K-means
+num_clusters = 5  # Adjust the number of clusters based on your data
+kmeans = KMeans(n_clusters=num_clusters, random_state=0)
+kmeans.fit(X)
+
+# Assign cluster labels to the data
+data['cluster_label'] = kmeans.labels_
+
+# Print the cluster labels and corresponding responses
+for cluster in range(num_clusters):
+    print(f"Cluster {cluster} responses:")
+    print(data[data['cluster_label'] == cluster]['Response_Column'])
+    print('-' * 50)
+    

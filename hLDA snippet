@@ -1,0 +1,74 @@
+import pandas as pd
+import numpy as np
+import re
+import tomotopy as tp
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+from gensim import corpora, models, similarities
+from hlda.sampler import HierarchicalLDA
+
+# Load the CSV file
+data = pd.read_csv('file.csv')
+
+# Preprocess the text data
+# Convert to lowercase
+data['Response_Column'] = data['Response_Column'].str.lower()
+
+data['Response_Column'] = data['Response_Column'].astype(str)
+data['Response_Column'].fillna('', inplace=True)
+
+# Remove punctuation
+data['Response_Column'] = data['Response_Column'].apply(lambda x: re.sub(r'[^\w\s]', '', x))
+
+# Remove stopwords
+stop_words = set(stopwords.words('english'))
+data['Response_Column'] = data['Response_Column'].apply(lambda x: ' '.join([word for word in x.split() if word not in stop_words]))
+
+# Lemmatization
+lemmatizer = WordNetLemmatizer()
+data['Response_Column'] = data['Response_Column'].apply(lambda x: ' '.join([lemmatizer.lemmatize(word) for word in x.split()]))
+
+# Tokenization
+tokenized_data = [doc.split() for doc in data['Response_Column']]
+
+# Create a corpus
+corpus = tp.utils.Corpus()
+
+# Add documents to the corpus
+for doc in tokenized_data:
+    corpus.add_doc(doc)
+
+# Set the hyperparameters for hLDA
+num_levels = 2  # Number of levels in the hierarchy
+alpha = 0.1     # Dirichlet hyperparameter for level 1
+gamma = 1.0     # Dirichlet hyperparameter for level 2
+
+# Create the hLDA model
+hlda_model = tp.HLDAModel(tw=tp.TermWeight.ONE, min_cf=5, rm_top=5, depth=num_levels, alpha=alpha, gamma=gamma)
+
+# Add the corpus to the model
+hlda_model.add_corpus(corpus)
+
+# Train the hLDA model
+hlda_model.train(1000)
+
+# Build the topic hierarchy using the custom data structure
+root_node = TopicNode(0, 0, -1)
+
+def build_hierarchy(node, hlda_node):
+    for child_id in hlda_node.children:
+        child_hlda_node = hlda_model.nodes[child_id]
+        child_node = TopicNode(node.level + 1, child_id, node.topic_id)
+        node.children.append(child_node)
+        build_hierarchy(child_node, child_hlda_node)
+
+build_hierarchy(root_node, hlda_model.nodes[0])
+
+# Export the hierarchy to CSV
+export_hierarchy(root_node)
+
+# Create a DataFrame from the CSV data
+df = pd.DataFrame(csv_data, columns=["Level", "Parent_ID", "Topic_ID"])
+
+# Export the DataFrame to a CSV file
+df.to_csv("topic_hierarchy.csv", index=False)
